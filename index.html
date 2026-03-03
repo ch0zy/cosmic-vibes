@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cosmic Vibes</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ── Lunar date via anchored CNY lookup ──────────────────────────────────
+    const CNY = [
+      [2010,1,14],[2011,1,3],[2012,0,23],[2013,1,10],[2014,0,31],[2015,1,19],
+      [2016,1,8],[2017,0,28],[2018,1,16],[2019,1,5],[2020,0,25],[2021,1,12],
+      [2022,1,1],[2023,0,22],[2024,1,10],[2025,0,29],[2026,1,17],[2027,1,6],
+    ];
+    const LUNAR_MONTHS_2025 = [30,29,30,29,30,30,29,30,29,30,30,29];
+    const LUNAR_MONTHS_2026 = [30,29,30,29,30,29,30,30,29,30,29,30];
+
+    function getLunarDate(date) {
+      const lunarMonthNames = ["正月","二月","三月","四月","五月","六月","七月","八月","九月","十月","冬月","腊月"];
+      const lunarDayNames = ["初一","初二","初三","初四","初五","初六","初七","初八","初九","初十",
+        "十一","十二","十三","十四","十五","十六","十七","十八","十九","二十",
+        "廿一","廿二","廿三","廿四","廿五","廿六","廿七","廿八","廿九","三十"];
+      let cnyDate = null, cnyYear = null;
+      for (let i = CNY.length - 1; i >= 0; i--) {
+        const [y, m, d] = CNY[i], c = new Date(y, m, d);
+        if (c <= date) { cnyDate = c; cnyYear = y; break; }
+      }
+      if (!cnyDate) return { lunarMonth: "正月", lunarDay: "初一" };
+      const daysSinceCNY = Math.floor((date - cnyDate) / 86400000);
+      const months = cnyYear === 2025 ? LUNAR_MONTHS_2025 : cnyYear === 2026 ? LUNAR_MONTHS_2026 : null;
+      let remaining = daysSinceCNY, monthIdx = 0;
+      if (months) {
+        while (monthIdx < months.length - 1 && remaining >= months[monthIdx]) { remaining -= months[monthIdx]; monthIdx++; }
+      } else {
+        monthIdx = Math.floor(daysSinceCNY / 29.53);
+        remaining = daysSinceCNY - Math.floor(monthIdx * 29.53);
+      }
+      return { lunarMonth: lunarMonthNames[monthIdx % 12], lunarDay: lunarDayNames[Math.min(remaining, 29)] };
+    }
+
+    function getChineseZodiac(year) {
+      return ["Rat","Ox","Tiger","Rabbit","Dragon","Snake","Horse","Goat","Monkey","Rooster","Dog","Pig"][(year - 1900) % 12];
+    }
+
+    function getHoroscope(month, day) {
+      if ((month===3&&day>=21)||(month===4&&day<=19)) return "Aries";
+      if ((month===4&&day>=20)||(month===5&&day<=20)) return "Taurus";
+      if ((month===5&&day>=21)||(month===6&&day<=20)) return "Gemini";
+      if ((month===6&&day>=21)||(month===7&&day<=22)) return "Cancer";
+      if ((month===7&&day>=23)||(month===8&&day<=22)) return "Leo";
+      if ((month===8&&day>=23)||(month===9&&day<=22)) return "Virgo";
+      if ((month===9&&day>=23)||(month===10&&day<=22)) return "Libra";
+      if ((month===10&&day>=23)||(month===11&&day<=21)) return "Scorpio";
+      if ((month===11&&day>=22)||(month===12&&day<=21)) return "Sagittarius";
+      if ((month===12&&day>=22)||(month===1&&day<=19)) return "Capricorn";
+      if ((month===1&&day>=20)||(month===2&&day<=18)) return "Aquarius";
+      return "Pisces";
+    }
+
+    function getLunarZodiacYear(date) {
+      const y = date.getFullYear();
+      const cny = CNY.find(([yr]) => yr === y);
+      if (!cny) return y;
+      return date < new Date(cny[0], cny[1], cny[2]) ? y - 1 : y;
+    }
+
+    // ── SVG Decorations ─────────────────────────────────────────────────────
+    const StarSVG = ({ size = 20, style = {} }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#A68B6A" strokeWidth="1.2" style={style}>
+        <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+      </svg>
+    );
+    const MoonSVG = ({ size = 20, style = {} }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#A68B6A" strokeWidth="1.2" style={style}>
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    );
+    const SunSVG = ({ size = 24, style = {} }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#A68B6A" strokeWidth="1.2" style={style}>
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    );
+    const SparkSVG = ({ size = 16, style = {} }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#C4A882" strokeWidth="1.2" style={style}>
+        <path d="M12 2 L13.5 10 L22 12 L13.5 14 L12 22 L10.5 14 L2 12 L10.5 10 Z"/>
+      </svg>
+    );
+    const CloudSVG = ({ size = 28, style = {} }) => (
+      <svg width={size} height={size} viewBox="0 0 64 64" fill="none" stroke="#A68B6A" strokeWidth="1.5" style={style}>
+        <path d="M50 38a10 10 0 0 0-2-19.8A14 14 0 0 0 20 22a10 10 0 0 0 2 20h28z"/>
+      </svg>
+    );
+
+    // ── Zodiac Animal Illustrations ─────────────────────────────────────────
+    const ZodiacAnimalSVG = ({ animal, size = 64 }) => {
+      const k = { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.6", stroke: "#8B6F4E", fill: "none" };
+      const illustrations = {
+        Rat: (<g {...k}><ellipse cx="33" cy="42" rx="17" ry="13"/><ellipse cx="30" cy="24" rx="11" ry="10"/><circle cx="22" cy="15" r="6"/><circle cx="38" cy="15" r="6"/><path d="M26 28 Q30 32 34 28"/><ellipse cx="30" cy="29" rx="2.5" ry="1.5"/><circle cx="26" cy="22" r="2" fill="#8B6F4E"/><circle cx="34" cy="22" r="2" fill="#8B6F4E"/><line x1="16" y1="27" x2="27" y2="28"/><line x1="16" y1="29.5" x2="27" y2="29.5"/><line x1="33" y1="28" x2="44" y2="27"/><line x1="33" y1="29.5" x2="44" y2="29.5"/><path d="M50 42 Q60 36 58 26 Q56 18 60 12" strokeWidth="1.3"/></g>),
+        Ox: (<g {...k}><ellipse cx="32" cy="42" rx="17" ry="12"/><ellipse cx="32" cy="24" rx="13" ry="11"/><path d="M21 16 Q14 6 10 10 Q12 16 20 18"/><path d="M43 16 Q50 6 54 10 Q52 16 44 18"/><ellipse cx="19" cy="22" rx="4" ry="6" transform="rotate(-15,19,22)"/><ellipse cx="45" cy="22" rx="4" ry="6" transform="rotate(15,45,22)"/><circle cx="27" cy="23" r="2" fill="#8B6F4E"/><circle cx="37" cy="23" r="2" fill="#8B6F4E"/><ellipse cx="32" cy="30" rx="6" ry="4"/><circle cx="30" cy="29" r="1.2" fill="#8B6F4E"/><circle cx="34" cy="29" r="1.2" fill="#8B6F4E"/></g>),
+        Tiger: (<g {...k}><ellipse cx="32" cy="42" rx="16" ry="11"/><ellipse cx="32" cy="23" rx="13" ry="11"/><path d="M21 14 L17 5 L27 13"/><path d="M43 14 L47 5 L37 13"/><circle cx="26" cy="22" r="2" fill="#8B6F4E"/><circle cx="38" cy="22" r="2" fill="#8B6F4E"/><ellipse cx="32" cy="28" rx="6" ry="5"/><circle cx="30" cy="27" r="1" fill="#8B6F4E"/><circle cx="34" cy="27" r="1" fill="#8B6F4E"/><line x1="18" y1="27" x2="26" y2="28"/><line x1="38" y1="28" x2="46" y2="27"/><path d="M27 14 Q32 12 37 14" strokeWidth="1.2"/><path d="M26 10 Q32 7 38 10" strokeWidth="1.2"/><path d="M30 32 Q32 35 34 32" strokeWidth="1.2"/></g>),
+        Rabbit: (<g {...k}><ellipse cx="32" cy="41" rx="14" ry="12"/><ellipse cx="32" cy="25" rx="10" ry="9"/><ellipse cx="25" cy="10" rx="4.5" ry="10"/><ellipse cx="39" cy="9" rx="4.5" ry="10" transform="rotate(8,39,9)"/><circle cx="27" cy="24" r="2" fill="#8B6F4E"/><circle cx="37" cy="24" r="2" fill="#8B6F4E"/><ellipse cx="32" cy="29" rx="2" ry="1.5" fill="#8B6F4E"/><line x1="32" y1="30" x2="30" y2="33"/><line x1="32" y1="30" x2="34" y2="33"/><line x1="19" y1="27" x2="29" y2="28.5"/><line x1="19" y1="29.5" x2="29" y2="29.5"/><line x1="35" y1="28.5" x2="45" y2="27"/><line x1="35" y1="29.5" x2="45" y2="29.5"/><circle cx="46" cy="43" r="4"/></g>),
+        Dragon: (<g {...k}><path d="M10 56 Q16 44 26 38 Q36 32 40 38 Q46 44 50 34 Q54 24 46 18"/><path d="M46 18 Q54 12 56 18 Q58 24 50 26 Q44 26 42 20 Z"/><path d="M48 12 Q46 6 44 8"/><path d="M54 12 Q56 6 58 8"/><circle cx="52" cy="18" r="1.8" fill="#8B6F4E"/><path d="M56 20 Q62 16 60 24 Q64 20 62 28" strokeWidth="1.3"/><path d="M34 36 L30 30"/><path d="M40 36 L38 29"/><path d="M46 32 L46 25"/><path d="M10 56 Q6 60 8 62 M10 56 Q8 62 12 63 M10 56 Q14 60 16 62"/></g>),
+        Snake: (<g {...k}><path d="M32 54 Q14 52 12 40 Q10 26 22 22 Q34 18 42 26 Q52 36 44 46 Q38 54 28 50 Q18 46 20 36 Q22 26 32 26 Q42 26 44 36"/><path d="M44 36 Q52 30 54 36 Q52 44 44 42 Z"/><circle cx="48" cy="34" r="1.5" fill="#8B6F4E"/><circle cx="52" cy="34" r="1.5" fill="#8B6F4E"/><path d="M54 38 L60 35 M54 38 L60 41" strokeWidth="1.2"/></g>),
+        Horse: (<g {...k}><ellipse cx="32" cy="44" rx="17" ry="11"/><line x1="20" y1="54" x2="18" y2="63"/><line x1="26" y1="55" x2="25" y2="63"/><line x1="38" y1="55" x2="39" y2="63"/><line x1="44" y1="54" x2="46" y2="63"/><path d="M40 34 Q44 22 40 16"/><path d="M34 10 Q42 8 44 16 Q46 22 38 26 Q32 28 30 22 Q28 16 34 10Z"/><path d="M40 14 Q46 10 48 16 Q50 22 44 22" strokeWidth="1.3"/><circle cx="36" cy="14" r="1.8" fill="#8B6F4E"/><ellipse cx="34" cy="20" rx="2" ry="1.2"/><path d="M15 42 Q8 38 10 48 Q12 54 8 58" strokeWidth="1.3"/></g>),
+        Goat: (<g {...k}><ellipse cx="32" cy="43" rx="16" ry="11"/><ellipse cx="32" cy="25" rx="11" ry="10"/><path d="M23 17 Q18 10 22 6 Q28 4 28 14"/><path d="M41 17 Q46 10 42 6 Q36 4 36 14"/><ellipse cx="20" cy="23" rx="3.5" ry="5" transform="rotate(-20,20,23)"/><ellipse cx="44" cy="23" rx="3.5" ry="5" transform="rotate(20,44,23)"/><circle cx="27" cy="24" r="2" fill="#8B6F4E"/><circle cx="37" cy="24" r="2" fill="#8B6F4E"/><ellipse cx="32" cy="30" rx="5" ry="3.5"/><path d="M28 34 Q32 40 36 34" strokeWidth="1.3"/><line x1="32" y1="34" x2="32" y2="40" strokeWidth="1.3"/></g>),
+        Monkey: (<g {...k}><ellipse cx="32" cy="42" rx="15" ry="12"/><ellipse cx="32" cy="23" rx="12" ry="11"/><circle cx="20" cy="21" r="6"/><circle cx="44" cy="21" r="6"/><ellipse cx="32" cy="27" rx="8" ry="7"/><circle cx="27" cy="21" r="2" fill="#8B6F4E"/><circle cx="37" cy="21" r="2" fill="#8B6F4E"/><ellipse cx="32" cy="28" rx="3" ry="2"/><path d="M28 31 Q32 34 36 31"/><path d="M47 40 Q58 34 58 44 Q58 54 50 52 Q44 50 46 44"/></g>),
+        Rooster: (<g {...k}><ellipse cx="30" cy="42" rx="15" ry="13"/><circle cx="34" cy="22" r="9"/><path d="M29 13 Q31 6 33 12 Q35 5 37 11 Q39 4 41 12"/><path d="M28 26 Q25 30 27 35 Q29 32 28 26"/><path d="M41 24 L48 21 L46 27 Z"/><circle cx="38" cy="20" r="2" fill="#8B6F4E"/><path d="M15 38 Q6 28 8 36"/><path d="M14 42 Q4 34 6 44"/><path d="M15 46 Q6 42 8 50"/><path d="M22 55 L20 63 M22 55 L17 61 M22 55 L24 63"/><path d="M36 55 L34 63 M36 55 L31 61 M36 55 L38 63"/></g>),
+        Dog: (<g {...k}><ellipse cx="32" cy="42" rx="17" ry="12"/><ellipse cx="32" cy="23" rx="12" ry="11"/><path d="M20 16 Q12 20 14 32 Q16 38 22 34 L22 16Z"/><path d="M44 16 Q52 20 50 32 Q48 38 42 34 L42 16Z"/><circle cx="27" cy="22" r="2" fill="#8B6F4E"/><circle cx="37" cy="22" r="2" fill="#8B6F4E"/><ellipse cx="32" cy="29" rx="6" ry="5"/><circle cx="30" cy="27" r="1" fill="#8B6F4E"/><circle cx="34" cy="27" r="1" fill="#8B6F4E"/><path d="M29 32 Q32 38 35 32"/><path d="M30 34 Q32 39 34 34"/><path d="M49 38 Q56 30 58 22" strokeWidth="1.3"/></g>),
+        Pig: (<g {...k}><ellipse cx="32" cy="42" rx="19" ry="14"/><ellipse cx="32" cy="23" rx="13" ry="12"/><path d="M21 13 L17 5 L27 12Z"/><path d="M43 13 L47 5 L37 12Z"/><circle cx="26" cy="21" r="2" fill="#8B6F4E"/><circle cx="38" cy="21" r="2" fill="#8B6F4E"/><ellipse cx="32" cy="29" rx="8" ry="6"/><circle cx="29" cy="29" r="2" fill="#8B6F4E"/><circle cx="35" cy="29" r="2" fill="#8B6F4E"/><path d="M51 42 Q58 40 56 46 Q54 52 50 48" strokeWidth="1.3"/></g>),
+      };
+      return (
+        <svg width={size} height={size} viewBox="0 0 64 64" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          {illustrations[animal] || <circle cx="32" cy="32" r="20" stroke="#8B6F4E" strokeWidth="1.6"/>}
+        </svg>
+      );
+    };
+
+    // ── Horoscope Glyphs ────────────────────────────────────────────────────
+    const HoroscopeSVG = ({ sign, size = 56 }) => {
+      const k = { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8", stroke: "#8B6F4E", fill: "none" };
+      const glyphs = {
+        Aries: (<g {...k}><path d="M32 44 Q32 28 24 18 Q18 10 14 14"/><path d="M32 44 Q32 28 40 18 Q46 10 50 14"/><path d="M22 44 Q32 40 42 44"/></g>),
+        Taurus: (<g {...k}><circle cx="32" cy="38" r="14"/><path d="M18 24 Q22 14 32 16 Q42 14 46 24"/><path d="M18 24 Q14 18 16 12"/><path d="M46 24 Q50 18 48 12"/></g>),
+        Gemini: (<g {...k}><line x1="22" y1="14" x2="22" y2="50"/><line x1="42" y1="14" x2="42" y2="50"/><path d="M18 14 Q32 9 46 14"/><path d="M18 50 Q32 55 46 50"/><line x1="22" y1="32" x2="42" y2="32"/></g>),
+        Cancer: (<g {...k}><path d="M46 28 Q52 38 46 46 Q38 56 26 52 Q14 48 14 38 Q14 28 24 22"/><circle cx="14" cy="38" r="4"/><circle cx="50" cy="28" r="4"/></g>),
+        Leo: (<g {...k}><circle cx="28" cy="36" r="12"/><path d="M28 24 Q30 14 38 12 Q48 10 50 20 Q52 30 42 32"/><path d="M42 32 Q48 40 46 48"/></g>),
+        Virgo: (<g {...k}><line x1="20" y1="12" x2="20" y2="52"/><path d="M20 28 Q28 16 36 20 Q46 24 44 34 Q42 46 32 48 Q26 49 24 44"/><path d="M44 46 Q46 52 42 56"/><line x1="36" y1="56" x2="48" y2="56"/></g>),
+        Libra: (<g {...k}><line x1="14" y1="44" x2="50" y2="44"/><path d="M14 44 Q20 30 32 28 Q44 30 50 44"/><line x1="32" y1="44" x2="32" y2="54"/><line x1="22" y1="54" x2="42" y2="54"/></g>),
+        Scorpio: (<g {...k}><line x1="18" y1="14" x2="18" y2="44"/><path d="M18 28 Q28 16 36 20 Q46 24 46 36 Q46 46 36 48"/><path d="M36 48 L44 42 M36 48 L42 54"/></g>),
+        Sagittarius: (<g {...k}><line x1="14" y1="50" x2="50" y2="14"/><path d="M34 14 L50 14 L50 30"/><line x1="16" y1="32" x2="32" y2="16"/></g>),
+        Capricorn: (<g {...k}><path d="M18 14 L18 44 Q18 54 30 54"/><path d="M18 30 Q28 18 38 24 Q50 32 46 46 Q44 56 32 54"/><path d="M30 54 Q26 60 30 64 Q34 60 30 54"/></g>),
+        Aquarius: (<g {...k}><path d="M12 28 Q18 20 24 28 Q30 36 36 28 Q42 20 52 28"/><path d="M12 42 Q18 34 24 42 Q30 50 36 42 Q42 34 52 42"/></g>),
+        Pisces: (<g {...k}><path d="M32 14 Q18 22 18 32 Q18 42 32 50"/><path d="M32 14 Q46 22 46 32 Q46 42 32 50"/><line x1="18" y1="32" x2="46" y2="32"/><path d="M32 14 Q26 8 20 10 M32 14 Q38 8 44 10"/><path d="M32 50 Q26 56 20 54 M32 50 Q38 56 44 54"/></g>),
+      };
+      return (
+        <svg width={size} height={size} viewBox="0 0 64 64" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          {glyphs[sign] || <circle cx="32" cy="32" r="16" stroke="#8B6F4E" strokeWidth="1.8"/>}
+        </svg>
+      );
+    };
+
+    // ── Sub-components ──────────────────────────────────────────────────────
+    const LuckBar = ({ label, value, icon }) => (
+      <div className="luck-bar-wrap">
+        <div className="luck-bar-header">
+          <span className="luck-label">{icon} {label}</span>
+          <span className="luck-value">{value}%</span>
+        </div>
+        <div className="luck-track">
+          <div className="luck-fill" style={{ width: `${value}%` }}/>
+        </div>
+      </div>
+    );
+
+    const CosmicDecor = () => (
+      <div className="cosmic-decor">
+        <StarSVG size={14} style={{ position:"absolute", top:30, left:"8%", opacity:0.4 }}/>
+        <StarSVG size={10} style={{ position:"absolute", top:80, right:"12%", opacity:0.3 }}/>
+        <MoonSVG size={18} style={{ position:"absolute", top:50, right:"6%", opacity:0.25 }}/>
+        <SparkSVG size={12} style={{ position:"absolute", top:120, left:"15%", opacity:0.35 }}/>
+        <StarSVG size={8}  style={{ position:"absolute", bottom:60, left:"5%", opacity:0.3 }}/>
+        <SparkSVG size={10} style={{ position:"absolute", bottom:100, right:"8%", opacity:0.3 }}/>
+        <MoonSVG size={14} style={{ position:"absolute", bottom:40, left:"20%", opacity:0.2 }}/>
+        <CloudSVG size={32} style={{ position:"absolute", top:10, left:"40%", opacity:0.15 }}/>
+      </div>
+    );
+
+    const SectionHeader = ({ icon, label }) => (
+      <div className="section-header">
+        {icon}
+        <span className="section-label">{label}</span>
+      </div>
+    );
+
+    // ── Main App ────────────────────────────────────────────────────────────
+    const App = () => {
+      const [birthDate, setBirthDate]   = useState("");
+      const [zodiac, setZodiac]         = useState(null);
+      const [horoscope, setHoroscope]   = useState(null);
+      const [reading, setReading]       = useState(null);
+      const [loading, setLoading]       = useState(false);
+      const [luckScores, setLuckScores] = useState(null);
+      const [brightSpots, setBrightSpots] = useState(null);
+      const [gentleHeeds, setGentleHeeds] = useState(null);
+      const [lunarInfo, setLunarInfo]   = useState(null);
+
+      const today = new Date();
+      const dateStr = today.toLocaleDateString("en-US", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+
+      useEffect(() => { setLunarInfo(getLunarDate(today)); }, []);
+
+      const handleSubmit = async () => {
+        if (!birthDate) return;
+        const d = new Date(birthDate);
+        const z = getChineseZodiac(getLunarZodiacYear(d));
+        const h = getHoroscope(d.getMonth() + 1, d.getDate());
+        setZodiac(z); setHoroscope(h);
+        setLoading(true); setReading(null); setLuckScores(null);
+        setBrightSpots(null); setGentleHeeds(null);
+
+        const { lunarMonth, lunarDay } = getLunarDate(today);
+        const prompt = `You are a poetic cosmic advisor weaving Chinese astrology and Western horoscopes into gentle, warm guidance.
+Today: ${dateStr}. Chinese lunar date: ${lunarMonth}${lunarDay}.
+User's Chinese Zodiac: ${z}. Western sign: ${h}.
+
+Write a personalized daily cosmic reading. Respond ONLY in this exact JSON (no markdown, no extra text):
+{
+  "reading": "A poetic 2-3 sentence daily vibe.",
+  "brightSpots": "2-3 sentences on what flows with ease today — opportunities, inspired moments, gifts.",
+  "gentleHeeds": "2-3 sentences on what to move mindfully around — gentle, non-alarming tone.",
+  "love": 72, "career": 65, "wellbeing": 80, "creativity": 55
+}`;
+        try {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000,
+              messages: [{ role: "user", content: prompt }] })
+          });
+          const data = await res.json();
+          const text = data.content.map(i => i.text || "").join("").replace(/```json|```/g, "").trim();
+          const p = JSON.parse(text);
+          setReading(p.reading); setBrightSpots(p.brightSpots); setGentleHeeds(p.gentleHeeds);
+          setLuckScores({ love: p.love, career: p.career, wellbeing: p.wellbeing, creativity: p.creativity });
+        } catch (e) {
+          setReading("The stars are resting... please try again in a moment.");
+        }
+        setLoading(false);
+      };
+
+      return (
+        <div className="app">
+          <CosmicDecor/>
+          <div className="container">
+
+            {/* Header */}
+            <div className="header">
+              <div className="header-title">
+                <MoonSVG size={22}/>
+                <h1>Cosmic Vibes</h1>
+                <SunSVG size={22}/>
+              </div>
+              <p className="header-date">{dateStr}</p>
+              {lunarInfo && <p className="header-lunar">农历 · {lunarInfo.lunarMonth}{lunarInfo.lunarDay}</p>}
+            </div>
+
+            {/* Birth Date */}
+            <div className="card">
+              <label className="input-label">Your Birth Date</label>
+              <div className="input-row">
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={e => setBirthDate(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && birthDate && !loading && handleSubmit()}
+                  max={new Date().toISOString().split("T")[0]}
+                  className="date-input"
+                />
+                <button
+                  onClick={handleSubmit}
+                  disabled={!birthDate || loading}
+                  className={`read-btn ${birthDate ? "active" : ""}`}
+                >
+                  {loading ? "..." : "Read ✦"}
+                </button>
+              </div>
+            </div>
+
+            {/* Signs */}
+            {zodiac && horoscope && (
+              <div className="signs-row">
+                <div className="card sign-card">
+                  <ZodiacAnimalSVG animal={zodiac} size={60}/>
+                  <div className="sign-sublabel">Chinese Zodiac</div>
+                  <div className="sign-name">Year of the {zodiac}</div>
+                </div>
+                <div className="card sign-card">
+                  <HoroscopeSVG sign={horoscope} size={60}/>
+                  <div className="sign-sublabel">Star Sign</div>
+                  <div className="sign-name">{horoscope}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Loader */}
+            {loading && (
+              <div className="card card-white loader-card">
+                <div className="loader-dots">
+                  <div className="dot" style={{ animationDelay: "0s" }}/>
+                  <div className="dot" style={{ animationDelay: "0.2s" }}/>
+                  <div className="dot" style={{ animationDelay: "0.4s" }}/>
+                </div>
+                <p className="loader-text">reading the stars for you…</p>
+              </div>
+            )}
+
+            {/* Today's Reading */}
+            {reading && (
+              <div className="card card-white">
+                <SectionHeader icon={<SparkSVG size={14}/>} label="Today's Reading"/>
+                <p className="reading-text">{reading}</p>
+              </div>
+            )}
+
+            {/* What's Working in Your Favour */}
+            {brightSpots && (
+              <div className="card">
+                <SectionHeader icon={<SunSVG size={14}/>} label="✦ What's Working in Your Favour"/>
+                <p className="body-text">{brightSpots}</p>
+              </div>
+            )}
+
+            {/* What to Tread Lightly Around */}
+            {gentleHeeds && (
+              <div className="card">
+                <SectionHeader icon={<MoonSVG size={14}/>} label="◎ What to Tread Lightly Around"/>
+                <p className="body-text">{gentleHeeds}</p>
+              </div>
+            )}
+
+            {/* Luck Forecast */}
+            {luckScores && (
+              <div className="card">
+                <SectionHeader icon={<StarSVG size={14}/>} label="Luck Forecast"/>
+                <LuckBar label="Love"       value={luckScores.love}       icon="♡"/>
+                <LuckBar label="Career"     value={luckScores.career}     icon="✦"/>
+                <LuckBar label="Wellbeing"  value={luckScores.wellbeing}  icon="◎"/>
+                <LuckBar label="Creativity" value={luckScores.creativity} icon="✿"/>
+              </div>
+            )}
+
+            {/* Idle */}
+            {!zodiac && !loading && (
+              <div className="idle">
+                <div className="idle-icons">
+                  <StarSVG size={18}/><MoonSVG size={18}/><SparkSVG size={18}/><SunSVG size={18}/>
+                </div>
+                <p className="idle-text">Enter your birth date to reveal your cosmic blueprint</p>
+              </div>
+            )}
+
+            <div className="footer">✦ as above, so below ✦</div>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
