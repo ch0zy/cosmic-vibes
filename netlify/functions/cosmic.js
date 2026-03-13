@@ -4,9 +4,29 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  try {
-    const { prompt } = JSON.parse(event.body);
+  // Check API key is present
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error("ANTHROPIC_API_KEY is not set");
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: { message: "Server config error: ANTHROPIC_API_KEY is not set" } })
+    };
+  }
 
+  let prompt;
+  try {
+    ({ prompt } = JSON.parse(event.body));
+  } catch (err) {
+    return {
+      statusCode: 400,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: { message: `Failed to parse request body: ${err.message}` } })
+    };
+  }
+
+  try {
+    console.log("Calling Anthropic API...");
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -23,15 +43,23 @@ exports.handler = async (event) => {
 
     const data = await res.json();
 
+    if (!res.ok) {
+      console.error("Anthropic API error:", JSON.stringify(data));
+    } else {
+      console.log("Anthropic API call successful");
+    }
+
     return {
       statusCode: res.status,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     };
   } catch (err) {
+    console.error("Unexpected error:", err.message);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: { message: err.message } })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: { message: `Unexpected error: ${err.message}` } })
     };
   }
 };
