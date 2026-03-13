@@ -225,22 +225,25 @@ Write a personalized daily cosmic reading. Respond ONLY in this exact JSON (no m
   "love": 72, "career": 65, "wellbeing": 80, "creativity": 55
 }`;
         try {
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
+          const res = await fetch("/.netlify/functions/cosmic", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "anthropic-dangerous-direct-browser-access": "true"
-            },
-            body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000,
-              messages: [{ role: "user", content: prompt }] })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt })
           });
           const data = await res.json();
+          if (!res.ok) {
+            const errMsg = data?.error?.message || JSON.stringify(data);
+            setReading(`API error (${res.status}): ${errMsg}`);
+            setLoading(false);
+            return;
+          }
           const text = data.content.map(i => i.text || "").join("").replace(/```json|```/g, "").trim();
           const p = JSON.parse(text);
           setReading(p.reading); setBrightSpots(p.brightSpots); setGentleHeeds(p.gentleHeeds);
           setLuckScores({ love: p.love, career: p.career, wellbeing: p.wellbeing, creativity: p.creativity });
         } catch (e) {
-          setReading("The stars are resting... please try again in a moment.");
+          setReading(`Caught error: ${e.message} — Check browser console for details.`);
+          console.error("Full error:", e);
         }
         setLoading(false);
       };
